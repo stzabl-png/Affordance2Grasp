@@ -1,0 +1,15 @@
+# Core
+numpy
+scipy
+h5py
+trimesh
+termcolor
+torch
+plotly
+
+# Training
+tensorboard
+
+# Sim (installed via Isaac Sim, not pip)
+# isaacsim
+# curobo

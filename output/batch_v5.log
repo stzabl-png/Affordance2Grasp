@@ -1,0 +1,763 @@
+nohup: ignoring input
+============================================================
+Batch Process All OakInk Objects
+============================================================
+
+📦 Found 124 objects:
+   OBJ: 100  |  PLY: 24
+   ⚡ FORCE mode: regenerating all grasp HDF5
+
+[1/124] A01001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[2/124] A01002 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[3/124] A01005 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[4/124] A01006 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[5/124] A01008 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[6/124] A01009 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[7/124] A01010 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[8/124] A01023 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[9/124] A01026 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[10/124] A01027 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[11/124] A02011 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[12/124] A02012 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[13/124] A02014 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[14/124] A02015 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[15/124] A02018 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[16/124] A02021 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[17/124] A02028 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[18/124] A02029 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[19/124] A02030 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[20/124] A02031 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[21/124] A02032 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[22/124] A15015 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[23/124] A15027 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[24/124] A16012 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[25/124] A16013 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[26/124] A16026 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[27/124] C03001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[28/124] C03001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[29/124] C10001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[30/124] C10001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[31/124] C11001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[32/124] C11001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[33/124] C12001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[34/124] C12001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[35/124] C13001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[36/124] C13001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[37/124] C14001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[38/124] C14001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[39/124] C15001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[40/124] C15001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[41/124] C20001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[42/124] C20001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[43/124] C22001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[44/124] C22001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[45/124] C23001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[46/124] C23001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[47/124] C25001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[48/124] C25001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[49/124] C26001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[50/124] C26001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[51/124] C28001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[52/124] C28001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[53/124] C35001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[54/124] C35001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[55/124] C37001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[56/124] C37001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[57/124] C40001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[58/124] C40001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[59/124] C41001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[60/124] C41001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[61/124] C42001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[62/124] C42001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[63/124] C43001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[64/124] C43001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[65/124] C50001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[66/124] C50001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[67/124] C51001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[68/124] C51001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[69/124] C52001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[70/124] C52001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[71/124] C90001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[72/124] C90001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[73/124] C91001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[74/124] C91001 (.ply)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[75/124] O01000 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[76/124] O02001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[77/124] O03001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[78/124] O03002 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[79/124] O03003 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[80/124] O21001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[81/124] O24001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[82/124] O36001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[83/124] O36002 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[84/124] O50001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[85/124] O50002 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[86/124] O93001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[87/124] S10001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[88/124] S10002 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[89/124] S10003 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[90/124] S10004 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[91/124] S10005 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[92/124] S10006 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[93/124] S10007 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[94/124] S10008 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[95/124] S10009 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[96/124] S10010 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[97/124] S10011 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[98/124] S10012 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[99/124] S10013 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[100/124] S10014 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[101/124] S10015 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[102/124] S10016 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[103/124] S10017 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[104/124] S10018 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[105/124] S10019 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[106/124] S10020 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[107/124] S10021 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[108/124] S10022 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[109/124] S10023 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[110/124] S10024 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[111/124] S15004 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[112/124] S16001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[113/124] S16002 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[114/124] S16003 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[115/124] S16005 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[116/124] S20001 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[117/124] S20005 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[118/124] S20021 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[119/124] S20022 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[120/124] Y03006 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[121/124] Y03021 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[122/124] Y27035 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[123/124] Y29040 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+[124/124] Y35037 (.obj)
+----------------------------------------
+    Generating grasp data...
+    ✅ Grasp HDF5 saved
+    ⏭️  Vis PNG already exists
+
+📝 USD conversion script: /home/lyh/Project/mano2gripper/convert_all_usd.sh
+
+============================================================
+✅ Complete: 124/124 objects (192s)
+============================================================
+
+下一步:
+  1. 查看可视化: ls /home/lyh/Project/Affordance2Grasp/output/analysis/*.png
+  2. USD 转换:   cd /home/lyh/Project/mano2gripper && sim45 convert_all_usd.sh
+  3. Sim 抓取:   sim45 Pipeline/run_grasp_sim.py --hdf5 <path>
