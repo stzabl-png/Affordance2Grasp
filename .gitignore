@@ -32,9 +32,16 @@ Thumbs.db
 # ========================
 # Large binary files
 # ========================
-*.usd
-*.usda
-*.usdc
 *.ckpt
 *.pt
 *.pth
+
+# ========================
+# USD: 默认排除, 但白名单场景资产
+# ========================
+*.usd
+*.usda
+*.usdc
+# 白名单: 场景必需的 USD 资产 (推送到 GitHub)
+!assets/robots/**/*.usd
+!assets/scene/**/*.usd
