@@ -25,9 +25,11 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # ---- Paths ----
-OBJ_DIR = "/home/lyh/Project/OakInk/image/obj"
-GRASP_DIR = "/home/lyh/Project/Affordance2Grasp/output/grasps"
-OUT_DIR = "/home/lyh/Project/Affordance2Grasp/output/analysis"
+import config
+OBJ_DIR = config.MESH_V1_DIR
+GRAB_MESH_DIR = os.path.join(config.DATA_HUB, 'meshes', 'grab')
+GRASP_DIR = config.GRASPS_DIR
+OUT_DIR = os.path.join(config.OUTPUT_DIR, "analysis")
 FRANKA_MESH_DIR = "/home/lyh/Project/curobo/src/curobo/content/assets/robot/franka_description/meshes/visual"
 
 
@@ -85,6 +87,11 @@ def render_mesh(ax, mesh, elev=15, azim=-60):
     """渲染 mesh — 带简单光照的灰色面 + 细边缘线."""
     verts = np.array(mesh.vertices)
     faces = np.array(mesh.faces)
+    max_faces = 3000
+    if len(faces) > max_faces:
+        # 均匀间隔抽面 (保持分布均匀, 比随机好)
+        step = max(1, len(faces) // max_faces)
+        faces = faces[::step]
 
     v0, v1, v2 = verts[faces[:, 0]], verts[faces[:, 1]], verts[faces[:, 2]]
     normals = np.cross(v1 - v0, v2 - v0)
@@ -118,10 +125,10 @@ def draw_mesh_transparent(ax, mesh, alpha=0.12, color='lightskyblue'):
     """半透明 mesh."""
     verts = np.array(mesh.vertices)
     faces = np.array(mesh.faces)
-    max_faces = 2000
+    max_faces = 3000
     if len(faces) > max_faces:
-        idx = np.random.choice(len(faces), max_faces, replace=False)
-        faces = faces[idx]
+        step = max(1, len(faces) // max_faces)
+        faces = faces[::step]
     polygons = verts[faces]
     poly = Poly3DCollection(polygons, alpha=alpha, facecolor=color,
                             edgecolor='gray', linewidth=0.1)
@@ -355,7 +362,37 @@ def main():
     args = parser.parse_args()
 
     obj_id = args.obj_id
-    mesh_path = os.path.join(OBJ_DIR, f"{obj_id}.obj")
+    mesh_path = None
+    # Search v1 (.obj, .ply)
+    for ext in ['.obj', '.ply']:
+        p = os.path.join(OBJ_DIR, f"{obj_id}{ext}")
+        if os.path.exists(p):
+            mesh_path = p
+            break
+    # Search GRAB mesh dir
+    if mesh_path is None:
+        grab_name_map = {'mug': 'coffeemug'}
+        search_name = grab_name_map.get(obj_id, obj_id)
+        for ext in ['.ply', '.obj']:
+            p = os.path.join(GRAB_MESH_DIR, f"{search_name}{ext}")
+            if os.path.exists(p):
+                mesh_path = p
+                break
+        # Fuzzy match
+        if mesh_path is None and os.path.exists(GRAB_MESH_DIR):
+            for f in os.listdir(GRAB_MESH_DIR):
+                if obj_id.replace('_','').lower() in f.replace('_','').lower():
+                    mesh_path = os.path.join(GRAB_MESH_DIR, f)
+                    break
+    # Search v2
+    if mesh_path is None:
+        v2_mesh = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                               "output", "meshes_v2", f"{obj_id}.obj")
+        if os.path.exists(v2_mesh):
+            mesh_path = v2_mesh
+    if mesh_path is None:
+        print(f"❌ Mesh not found for {obj_id}")
+        return
     grasp_path = os.path.join(GRASP_DIR, f"{obj_id}_grasp.hdf5")
 
     print(f"Loading {obj_id}...")

@@ -152,12 +152,12 @@ class PointNetFeaturePropagation(nn.Module):
 class PointNet2Seg(nn.Module):
     """PointNet++ Part Segmentation for Affordance Prediction
     
-    多任务版本:
-      - 分割头: 每个点的接触概率 (N, 2)
-      - 回归头: 全局受力中心 (3,)  [可选]
+    多任务版本 (Phase 3 连续回归):
+      - 回归头 1: 每个点的连续接触 affordance (N, 1), 范围 [0,1]
+      - 回归头 2: 全局受力中心 (3,)  [可选]
     """
 
-    def __init__(self, num_classes=2, in_channel=6, predict_force_center=False):
+    def __init__(self, num_classes=1, in_channel=7, predict_force_center=False):
         super().__init__()
         self.predict_force_center = predict_force_center
         
@@ -202,7 +202,9 @@ class PointNet2Seg(nn.Module):
         x = l0_points.permute(0, 2, 1)
         x = self.drop1(F.relu(self.bn1(self.conv1(x))))
         x = self.conv2(x)
-        seg_logits = x.permute(0, 2, 1)  # (B, N, 2)
+        # (B, 1, N)
+        seg_logits = torch.sigmoid(x.permute(0, 2, 1)).squeeze(-1)  # (B, N)
+
 
         if self.predict_force_center:
             # 全局特征: SA3 输出 max pool over 64 points → (B, 512)

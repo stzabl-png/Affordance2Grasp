@@ -34,7 +34,18 @@ DATASET_DIR = config.DATASET_DIR
 
 
 def load_object_mesh(obj_id):
-    """加载物体 mesh."""
+    """加载物体 mesh (支持 v1 和 v2)."""
+    # v2 物体: O02@xxxx@xxxxx 或其他 @ 开头的 ID
+    if "@" in obj_id:
+        v2_dir = getattr(config, 'OAKINK2_OBJ_DIR', None)
+        if v2_dir:
+            obj_dir = os.path.join(v2_dir, obj_id)
+            if os.path.isdir(obj_dir):
+                for f in os.listdir(obj_dir):
+                    if f.endswith(('.ply', '.obj')):
+                        return trimesh.load(os.path.join(obj_dir, f), force='mesh')
+
+    # v1 物体: 直接在 OBJ_DIR 中查找
     for ext in [".obj", ".ply"]:
         path = os.path.join(OBJ_DIR, f"{obj_id}{ext}")
         if os.path.exists(path):
@@ -97,9 +108,14 @@ def main():
         print(f"  Intent filter: {args.intent}")
     sys.stdout.flush()
 
-    # Discover all NPZ files
-    npz_files = sorted(glob.glob(os.path.join(BATCH_OUTPUT_DIR, "**", "*.npz"), recursive=True))
-    print(f"  Found {len(npz_files)} contact frames")
+    # Discover all NPZ files (v1 + v2)
+    v1_files = sorted(glob.glob(os.path.join(BATCH_OUTPUT_DIR, "**", "*.npz"), recursive=True))
+    v2_dir = getattr(config, 'CONTACTS_V2_DIR', None)
+    v2_files = []
+    if v2_dir and os.path.isdir(v2_dir):
+        v2_files = sorted(glob.glob(os.path.join(v2_dir, "**", "*.npz"), recursive=True))
+    npz_files = v1_files + v2_files
+    print(f"  Found {len(v1_files)} v1 + {len(v2_files)} v2 = {len(npz_files)} contact frames")
     sys.stdout.flush()
 
     if not npz_files:

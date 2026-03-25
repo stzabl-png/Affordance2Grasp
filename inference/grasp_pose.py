@@ -179,17 +179,12 @@ def verify_gripper_closure(grasp_point, finger_open_dir, mesh, max_width=0.08):
 
 def generate_grasp_candidates(contact_pts, mesh, force_center=None):
     """
-    生成多个候选抓取位姿 (世界轴对齐接近方向)。
+    Human-Guided Sampling (PCA + Jitter).
 
-    接近方向严格对齐世界坐标轴:
-      - 右侧: approach = -X  (从右往左)
-      - 左侧: approach = +X  (从左往右)
-      - 正面: approach = -Y  (从前往后)
-      - 上方: approach = -Z  (从上往下)
-
-    指尖连线始终与接触面平行 (不抓棱角):
-      - 水平接近 (±X, -Y): 指尖连线沿 Z (竖直方向)
-      - 上方接近 (-Z):      指尖连线沿最窄水平方向 (X 或 Y)
+    1. PCA 分析接触点 → 手指张开方向
+    2. 叉乘物体主轴 → 接近方向
+    3. 角度抖动 ±30° 增加多样性
+    4. Top-down 兜底
 
     Args:
         contact_pts: (N, 3) 接触点
@@ -202,204 +197,156 @@ def generate_grasp_candidates(contact_pts, mesh, force_center=None):
     if len(contact_pts) < 3:
         raise ValueError(f"接触点太少: {len(contact_pts)}, 需要至少 3 个")
 
-    FINGER_LENGTH = 0.04       # 夹爪手指长度 4cm
-    MAX_GRIPPER_OPEN = 0.08    # 夹爪最大开口 8cm
-    MAX_INSERT_DEPTH = 0.035   # 最大插入深度 3.5cm (手指4cm - 安全余量0.5cm)
-    # TCP 偏移: panda_hand → 指尖中心 (ee_link), 来自 Franka URDF
-    # panda_hand → finger_base = 5.84cm, finger_length ≈ 4.5cm
-    # panda_hand → ee_link = 10.34cm
-    TCP_OFFSET = 0.1034
+    FINGER_LENGTH = 0.04
+    MAX_GRIPPER_OPEN = 0.08
+    MAX_INSERT_DEPTH = 0.035
+    TCP_OFFSET = 0.105
 
     verts = np.array(mesh.vertices)
     obj_center = verts.mean(axis=0)
     principal_axis = compute_principal_axis(mesh)
 
-    # 抓取点 (夹爪指尖中点)
+    # 抓取点
     if force_center is not None:
         grasp_point = np.array(force_center, dtype=np.float64)
-
-        # 边界情况: 受力中心太深
         closest_pt, dist, _ = trimesh.proximity.closest_point(
             mesh, grasp_point.reshape(1, -1))
-        surface_depth = float(dist[0])
-        if surface_depth > FINGER_LENGTH:
+        if float(dist[0]) > FINGER_LENGTH:
             surface_pt = closest_pt[0]
             inward_dir = grasp_point - surface_pt
             inward_norm = np.linalg.norm(inward_dir)
             if inward_norm > 1e-8:
-                inward_dir = inward_dir / inward_norm
-                grasp_point = surface_pt + FINGER_LENGTH * inward_dir
+                grasp_point = surface_pt + FINGER_LENGTH * (inward_dir / inward_norm)
     else:
         contact_centroid = contact_pts.mean(axis=0)
         pa_offset = np.dot(contact_centroid - obj_center, principal_axis)
         grasp_point = obj_center + pa_offset * principal_axis
 
-    # 物体高度
     proj_pa = verts @ principal_axis
     obj_height = proj_pa.max() - proj_pa.min()
 
-    candidates = []
+    # PCA on contact points
+    centered_contacts = contact_pts - contact_pts.mean(axis=0)
+    _, _, Vt_c = np.linalg.svd(centered_contacts, full_matrices=False)
+    contact_spread_dir = Vt_c[0]
+    contact_spread_dir /= (np.linalg.norm(contact_spread_dir) + 1e-8)
 
-    # ---- 水平接近 ----
-    horizontal_approaches = [
-        # (name, approach_dir, finger_open_dir)
-        ("right", np.array([-1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0])),  # approach -X, finger along Y
-        ("left",  np.array([ 1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0])),  # approach +X, finger along Y
-        ("front", np.array([ 0.0, 1.0, 0.0]), np.array([1.0, 0.0, 0.0])),  # approach +Y, finger along X
+    base_approach = np.cross(principal_axis, contact_spread_dir)
+    base_approach /= (np.linalg.norm(base_approach) + 1e-8)
+
+    BASE_DIRS = [
+        ("dynamic_front", base_approach),
+        ("dynamic_back", -base_approach),
+        ("top_down", -principal_axis)
     ]
 
-    for name, approach, x_open in horizontal_approaches:
-        # x_open = 指尖连线方向 (per-direction)
+    JITTER_DEGREES = [-30, -15, 0, 15, 30]
+    generated_directions = []
+
+    for name, b_dir in BASE_DIRS:
+        if name == "top_down":
+            generated_directions.append(("top_down", b_dir))
+            for rot_deg in [-15, 15]:
+                rot_rad = np.radians(rot_deg)
+                idx_axis = np.argmin(np.abs(b_dir))
+                axis = np.zeros(3); axis[idx_axis] = 1.0
+                rot_vec = Rotation.from_rotvec(rot_rad * axis)
+                generated_directions.append((f"top_down_{rot_deg}", rot_vec.apply(b_dir)))
+        else:
+            for yaw_deg in JITTER_DEGREES:
+                yaw_rad = np.radians(yaw_deg)
+                rot_yaw = Rotation.from_rotvec(yaw_rad * principal_axis)
+                jittered_dir = rot_yaw.apply(b_dir)
+                jittered_dir /= (np.linalg.norm(jittered_dir) + 1e-8)
+                generated_directions.append((f"{name}_y{yaw_deg}", jittered_dir))
+
+    print(f"         ✅ 动态聚类生成了 {len(generated_directions)} 个具有人体先验的探测方向 (带 Jitter)")
+
+    candidates = []
+
+    def _find_best_finger_dir(approach, gp):
+        if abs(approach[2]) < 0.9:
+            up = np.array([0, 0, 1.0])
+        else:
+            up = np.array([1, 0, 0.0])
+        u = np.cross(approach, up)
+        u = u / (np.linalg.norm(u) + 1e-8)
+        v = np.cross(approach, u)
+        v = v / (np.linalg.norm(v) + 1e-8)
+        best_width = 1e10
+        best_dir = u.copy()
+        for angle_deg in range(0, 180, 15):
+            angle = np.radians(angle_deg)
+            finger_dir = np.cos(angle) * u + np.sin(angle) * v
+            finger_dir = finger_dir / (np.linalg.norm(finger_dir) + 1e-8)
+            offsets = (verts - gp) @ finger_dir
+            w = offsets.max() - offsets.min()
+            if w < best_width:
+                best_width = w
+                best_dir = finger_dir.copy()
+        return best_dir, best_width
+
+    for name, approach in generated_directions:
+        approach = np.array(approach, dtype=np.float64)
+        is_topdown = "top_down" in name
+        approach_type = "top_down" if is_topdown else "horizontal"
+
+        x_open, width = _find_best_finger_dir(approach, grasp_point)
+
         y_body = np.cross(approach, x_open)
         y_body = y_body / (np.linalg.norm(y_body) + 1e-8)
         x_open = np.cross(y_body, approach)
         x_open = x_open / (np.linalg.norm(x_open) + 1e-8)
-
         rot = np.column_stack([x_open, y_body, approach])
         if np.linalg.det(rot) < 0:
             x_open = -x_open
             rot = np.column_stack([x_open, y_body, approach])
 
-        # 截面宽度 (在 grasp_point 处)
-        width = compute_cross_section_width(verts, grasp_point, principal_axis, approach)
-
-        # 如果截面 > 8cm, 沿主轴上下搜索更窄的截面
         adjusted_gp = grasp_point.copy()
         if width > MAX_GRIPPER_OPEN:
             proj_vals = verts @ principal_axis
             pa_min, pa_max = proj_vals.min(), proj_vals.max()
             cur_h = np.dot(grasp_point, principal_axis)
             best_w, best_off = width, 0.0
-            for off in np.linspace(-0.05, 0.05, 21):  # ±5cm, 每0.5cm
+            for off in np.linspace(-0.05, 0.05, 11):
                 h = cur_h + off
                 if h < pa_min or h > pa_max:
                     continue
-                w = compute_cross_section_width(
-                    verts, grasp_point + off * principal_axis, principal_axis, approach)
+                test_pt = grasp_point + off * principal_axis
+                d, w = _find_best_finger_dir(approach, test_pt)
                 if w < best_w:
                     best_w, best_off = w, off
             if best_w < width:
                 adjusted_gp = grasp_point + best_off * principal_axis
                 width = best_w
 
-        # ★ 搜索后仍 > 8cm → 放弃此方向
         if width > MAX_GRIPPER_OPEN:
             continue
 
-        # ★ 深度限制: 手指最多伸进去 3.5cm
         adjusted_gp = clamp_grasp_depth(adjusted_gp, verts, approach, MAX_INSERT_DEPTH, mesh=mesh)
-
-        # ★ 截面中心修正: 沿 finger 方向居中
         adjusted_gp = correct_to_cross_section_center(adjusted_gp, verts, approach, x_open)
 
-        # ★ Ray casting 闭合验证
         closure_ok, ray_width = verify_gripper_closure(adjusted_gp, x_open, mesh, MAX_GRIPPER_OPEN)
         if not closure_ok:
             continue
-        # 用 ray casting 的实际宽度 (比截面估算更准确)
+        width = ray_width
         gripper_width = float(np.clip(ray_width + 0.005, 0.01, MAX_GRIPPER_OPEN))
 
-        # panda_hand 位置 = 指尖中点沿接近方向后退 TCP_OFFSET
         panda_hand_pos = adjusted_gp - approach * TCP_OFFSET
 
         candidates.append({
-            "name": f"horizontal_{name}",
-            "position": panda_hand_pos.astype(np.float32),  # panda_hand EE 位置
+            "name": name,
+            "position": panda_hand_pos.astype(np.float32),
             "rotation": rot.astype(np.float32),
             "gripper_width": gripper_width,
-            "approach_type": "horizontal",
-            "angle_deg": {"right": 0, "left": 180, "front": 90}.get(name, 0),
+            "approach_type": approach_type,
+            "angle_deg": int(np.degrees(np.arctan2(approach[0], approach[1]))),
             "cross_section_width": float(width),
             "obj_height": float(obj_height),
-            "grasp_point": adjusted_gp.astype(np.float32),  # 指尖中点 (可视化用)
+            "grasp_point": adjusted_gp.astype(np.float32),
         })
 
-    # ---- Top-Down: approach = -Z ----
-    z_down = np.array([0.0, 0.0, -1.0])
-    z_up = np.array([0.0, 0.0, 1.0])
-
-    # 指尖方向 = 垂直于物体整体最长的水平轴 (用 bounding box 判断)
-    # 注意: compute_cross_section_width 返回的是 cross(principal_axis, approach_dir) 方向的宽度
-    # 即: approach=[1,0,0] → 测量 Y 方向宽度; approach=[0,1,0] → 测量 X 方向宽度
-    span_x = verts[:, 0].max() - verts[:, 0].min()
-    span_y = verts[:, 1].max() - verts[:, 1].min()
-    if span_x > span_y:
-        # X 更长 → 指尖沿 Y (垂直于长轴X) → 测 Y 方向宽度 → approach=[1,0,0]
-        x_open_td = np.array([0.0, 1.0, 0.0])
-        td_width = compute_cross_section_width(verts, grasp_point, z_up, np.array([1, 0, 0.0]))
-    else:
-        # Y 更长 → 指尖沿 X (垂直于长轴Y) → 测 X 方向宽度 → approach=[0,1,0]
-        x_open_td = np.array([1.0, 0.0, 0.0])
-        td_width = compute_cross_section_width(verts, grasp_point, z_up, np.array([0, 1, 0.0]))
-
-
-
-
-    # 如果 > 8cm, 沿 Z 轴上下搜索更窄截面 (自动选最窄方向)
-    td_gp = grasp_point.copy()
-    if td_width > MAX_GRIPPER_OPEN:
-        proj_z = verts[:, 2]
-        z_min, z_max = proj_z.min(), proj_z.max()
-        best_w, best_z = td_width, grasp_point[2]
-        best_dir = x_open_td.copy()
-        for z_off in np.linspace(-0.05, 0.05, 21):
-            test_z = grasp_point[2] + z_off
-            if test_z < z_min or test_z > z_max:
-                continue
-            test_pt = grasp_point.copy()
-            test_pt[2] = test_z
-            w1 = compute_cross_section_width(verts, test_pt, z_up, np.array([1, 0, 0.0]))
-            w2 = compute_cross_section_width(verts, test_pt, z_up, np.array([0, 1, 0.0]))
-            w = min(w1, w2)
-            if w < best_w:
-                best_w, best_z = w, test_z
-                best_dir = np.array([1.0, 0.0, 0.0]) if w1 < w2 else np.array([0.0, 1.0, 0.0])
-        if best_w < td_width:
-            td_gp = grasp_point.copy()
-            td_gp[2] = best_z
-            td_width = best_w
-            x_open_td = best_dir
-
-
-    # ★ 搜索后仍 > 8cm → 放弃 top-down
-    if td_width <= MAX_GRIPPER_OPEN:
-        # ★ 深度限制: 手指最多伸进去 3.5cm
-        td_gp = clamp_grasp_depth(td_gp, verts, z_down, MAX_INSERT_DEPTH, mesh=mesh)
-
-        # ★ 截面中心修正: 沿 finger 方向居中
-        td_gp = correct_to_cross_section_center(td_gp, verts, z_down, x_open_td)
-
-        # ★ Ray casting 闭合验证
-        closure_ok, ray_width = verify_gripper_closure(td_gp, x_open_td, mesh, MAX_GRIPPER_OPEN)
-        if not closure_ok:
-            pass  # top-down 不因为 ray 失败就跳过, 保留截面宽度
-        else:
-            td_width = ray_width  # 用实际 ray 宽度
-
-        y_body_td = np.cross(z_down, x_open_td)
-        y_body_td = y_body_td / (np.linalg.norm(y_body_td) + 1e-8)
-        rot_td = np.column_stack([x_open_td, y_body_td, z_down])
-        if np.linalg.det(rot_td) < 0:
-            x_open_td = -x_open_td
-            rot_td = np.column_stack([x_open_td, y_body_td, z_down])
-
-        td_gw = float(np.clip(td_width + 0.005, 0.01, MAX_GRIPPER_OPEN))
-
-        # panda_hand 位置 = 指尖中点沿接近方向后退 TCP_OFFSET
-        td_panda_hand_pos = td_gp - z_down * TCP_OFFSET
-
-        candidates.append({
-            "name": "top_down",
-            "position": td_panda_hand_pos.astype(np.float32),  # panda_hand EE 位置
-            "rotation": rot_td.astype(np.float32),
-            "gripper_width": td_gw,
-            "approach_type": "top_down",
-            "angle_deg": -1,
-            "cross_section_width": float(td_width),
-            "obj_height": float(obj_height),
-            "grasp_point": td_gp.astype(np.float32),  # 指尖中点 (可视化用)
-        })
-
+    print(f"         ✅ 有效候选数量: {len(candidates)}")
     if len(candidates) == 0:
         raise ValueError(f"物体所有方向截面都 > {MAX_GRIPPER_OPEN*100:.0f}cm, 无法抓取")
 
@@ -410,64 +357,54 @@ def generate_grasp_candidates(contact_pts, mesh, force_center=None):
 
 def score_candidates(candidates):
     """
-    对候选打分排序。
+    对候选打分排序 (纯几何学, 不依赖方向名称)。
 
     打分规则:
-    1. 宽度可抓 (40分): 截面宽度 < 8cm
-    2. Robot-Facing (30分): 接近方向朝 +Y (机器人从正面接近物体)
-    3. 高度自适应 (20分): 矮物体优先 top-down
-    4. 方向稳定 (10分): front 和 right 方向更优
+    1. 宽度可抓 (40分): 截面宽度 < 8cm, 越窄越好
+    2. 接近可达 (30分): 接近方向与 +Y 对齐 (机器人正面) 得分最高
+    3. 高度间距 (20分): panda_hand 越高于桌面越好 (避免撞桌面)
+    4. 抓取稳定 (10分): 接近方向与物体表面越垂直越好 (法线方向)
     """
     scored = []
     for c in candidates:
         score = 0.0
         width = c["cross_section_width"]
-        obj_h = c["obj_height"]
         approach = c["rotation"][:, 2]  # z 列 = 接近方向
 
-        # 1. 宽度可抓 (40分)
+        # 1. 宽度可抓 (40分): 越窄越好
         if width < 0.06:
             score += 40
         elif width < 0.08:
             score += 40 * (0.08 - width) / 0.02
         else:
-            score += 0  # 太宽, 夹不住
+            score += 0
 
-        # 2. Robot-Facing (30分)
-        # 机器人从 +Y 方向面对物体, approach = +Y = 最佳
-        robot_approach = np.array([0, 1, 0])  # 正面接近 = +Y
+        # 2. 接近可达 (30分): 偏好 +Y (正面), 其次水平, 最后纯垂直
+        robot_approach = np.array([0.0, 1.0, 0.0])
         cos_robot = np.dot(approach, robot_approach)
-        score += 30 * max(0, (cos_robot + 1) / 2)  # [-1,1] → [0,1]
+        score += 30 * max(0, (cos_robot + 1) / 2)
 
-        # 3. 高度自适应 (20分)
-        if c["approach_type"] == "top_down":
-            if obj_h < 0.05:
-                score += 20
-            elif obj_h < 0.08:
-                score += 10
-            else:
-                score += 5
-        else:
-            if obj_h > 0.08:
-                score += 20
-            elif obj_h > 0.05:
-                score += 15
-            else:
-                score += 5
+        # 3. 高度间距 (20分): 接近方向的 Z 分量越正 (从上往下/水平), 越安全
+        # approach_z ≈ 0 → 水平 (好), approach_z ≈ -1 → top-down (也好)
+        # approach_z ≈ +1 → bottom-up (差, 撞桌面)
+        if approach[2] < 0:  # 有向下分量 (top-down 类)
+            score += 15
+        elif abs(approach[2]) < 0.3:  # 近似水平
+            score += 20
+        else:  # 向上分量大 → 可能撞桌面
+            score += 5
 
-        # 4. 方向稳定 (10分)
-        name = c.get("name", "")
-        if "front" in name:
-            score += 10  # 正面接近最稳定
-        elif "right" in name or "left" in name:
-            score += 7   # 左右次之
+        # 4. 抓取稳定 (10分): 偏好 top-down 或纯水平 (而非倾斜)
+        # 接近方向与水平面/竖直的对齐度
+        horiz_component = np.sqrt(approach[0]**2 + approach[1]**2)
+        if horiz_component > 0.9 or abs(approach[2]) > 0.9:
+            score += 10  # 纯水平或纯竖直
         else:
-            score += 3   # top_down
+            score += 5   # 倾斜方向
 
         c["score"] = round(score, 1)
         scored.append(c)
 
-    # 按分数排序
     scored.sort(key=lambda x: x["score"], reverse=True)
     return scored
 

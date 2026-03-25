@@ -1,41 +1,75 @@
 #!/bin/bash
-# Batch regenerate all HDF5 grasp files with new world-axis-aligned approach
+# Batch regenerate all HDF5 grasp files with fixed-axis approach
+# Covers: OakInk V1 (157 obj) + GRAB (50 stl)
 # Usage: bash batch_regen_grasps.sh
 
 cd /home/lyh/Project/Affordance2Grasp
 
-MESH_DIR="/home/lyh/Project/OakInk/image/obj"
-OUT_DIR="/home/lyh/Project/Affordance2Grasp/output/grasps"
 TOTAL=0
 SUCCESS=0
 FAIL=0
 SKIP=0
 
 echo "============================================================"
-echo " Batch Regenerate HDF5 Grasps (World-Axis Aligned)"
+echo " Batch Regenerate HDF5 Grasps (Fixed-Axis: Front/Left/Right/TopDown)"
 echo "============================================================"
 
-for obj_file in "$MESH_DIR"/*.obj; do
+# --- OakInk V1 ---
+echo ""
+echo "--- Dataset: OakInk V1 ---"
+for obj_file in /home/lyh/Project/Affordance2Grasp/data_hub/meshes/v1/*.obj; do
+    [ -f "$obj_file" ] || continue
     obj_id=$(basename "$obj_file" .obj)
     TOTAL=$((TOTAL + 1))
-    echo "[$TOTAL] $obj_id ..."
+    echo -n "[$TOTAL] $obj_id ... "
 
-    # 用 pipefail 确保 $? 反映 python3 的退出码, 而非 tail
     set -o pipefail
-    python3 -m inference.grasp_pose --mesh "$obj_file" 2>&1 | tail -3
+    output=$(python3 -m inference.grasp_pose --mesh "$obj_file" 2>&1)
     exit_code=$?
     set +o pipefail
 
     if [ $exit_code -eq 0 ]; then
+        n_cands=$(echo "$output" | grep -c "✅")
         SUCCESS=$((SUCCESS + 1))
+        echo "✅ ($n_cands candidates)"
     else
-        # 检查是否因为物体太大而跳过
-        if python3 -m inference.grasp_pose --mesh "$obj_file" 2>&1 | grep -q "无法抓取"; then
+        if echo "$output" | grep -q "无法抓取"; then
             SKIP=$((SKIP + 1))
-            echo "  ⏭️  SKIP (too large): $obj_id"
+            echo "⏭️  SKIP (too large)"
         else
             FAIL=$((FAIL + 1))
-            echo "  ❌ FAILED: $obj_id"
+            echo "❌ FAILED"
+            echo "$output" | tail -3
+        fi
+    fi
+done
+
+# --- GRAB (stl files, trimesh can read directly) ---
+echo ""
+echo "--- Dataset: GRAB ---"
+for stl_file in /home/lyh/Project/GRAB_data/_unzipped/*.stl; do
+    [ -f "$stl_file" ] || continue
+    obj_id=$(basename "$stl_file" .stl)
+    TOTAL=$((TOTAL + 1))
+    echo -n "[$TOTAL] $obj_id ... "
+
+    set -o pipefail
+    output=$(python3 -m inference.grasp_pose --mesh "$stl_file" 2>&1)
+    exit_code=$?
+    set +o pipefail
+
+    if [ $exit_code -eq 0 ]; then
+        n_cands=$(echo "$output" | grep -c "✅")
+        SUCCESS=$((SUCCESS + 1))
+        echo "✅ ($n_cands candidates)"
+    else
+        if echo "$output" | grep -q "无法抓取"; then
+            SKIP=$((SKIP + 1))
+            echo "⏭️  SKIP (too large)"
+        else
+            FAIL=$((FAIL + 1))
+            echo "❌ FAILED"
+            echo "$output" | tail -3
         fi
     fi
 done

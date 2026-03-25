@@ -2,7 +2,7 @@
 """
 Batch Process All OakInk Objects
 =================================
-处理 /home/lyh/Project/OakInk/image/obj/ 下的所有 OBJ/PLY 文件:
+处理 data_hub/meshes/v1/ 下的所有 OBJ/PLY 文件:
   1. PLY → OBJ 转换 (C 系列)
   2. Affordance 推理 → grasp HDF5
   3. 可视化图 PNG
@@ -22,16 +22,17 @@ import subprocess
 import time
 
 # ============================================================
-# 配置
+# 配置 — 使用 config 中的 data_hub 路径
 # ============================================================
-OAKINK_OBJ_DIR = "/home/lyh/Project/OakInk/image/obj"
-AFFORDANCE_ROOT = "/home/lyh/Project/Affordance2Grasp"
-MANO2GRIPPER_ROOT = "/home/lyh/Project/mano2gripper"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import config
 
-GRASPS_DIR = os.path.join(AFFORDANCE_ROOT, "output", "grasps")
-VIS_DIR = os.path.join(AFFORDANCE_ROOT, "output", "analysis")
-ASSETS_DIR = os.path.join(MANO2GRIPPER_ROOT, "Pipeline", "assets")
-USD_SCRIPT_PATH = os.path.join(MANO2GRIPPER_ROOT, "convert_all_usd.sh")
+OAKINK_OBJ_DIR = config.MESH_V1_DIR
+AFFORDANCE_ROOT = config.PROJECT_DIR
+
+GRASPS_DIR = config.GRASPS_DIR
+VIS_DIR = os.path.join(config.OUTPUT_DIR, "analysis")
+ASSETS_DIR = os.path.join(config.ASSETS_DIR, "usd")  # USD 资产目录
 
 os.makedirs(GRASPS_DIR, exist_ok=True)
 os.makedirs(VIS_DIR, exist_ok=True)
@@ -41,10 +42,20 @@ os.makedirs(ASSETS_DIR, exist_ok=True)
 def discover_objects():
     """发现所有 OBJ/PLY 文件, 返回 [(obj_id, file_path, ext), ...]"""
     objects = []
+    # v1 meshes
     for f in sorted(os.listdir(OAKINK_OBJ_DIR)):
         name, ext = os.path.splitext(f)
         if ext.lower() in ('.obj', '.ply'):
             objects.append((name, os.path.join(OAKINK_OBJ_DIR, f), ext.lower()))
+    # GRAB meshes
+    grab_dir = os.path.join(config.DATA_HUB, 'meshes', 'grab')
+    if os.path.exists(grab_dir):
+        for f in sorted(os.listdir(grab_dir)):
+            name, ext = os.path.splitext(f)
+            if ext.lower() in ('.obj', '.ply') and '_low' not in name:
+                # Skip if already in v1
+                if not any(o[0] == name for o in objects):
+                    objects.append((name, os.path.join(grab_dir, f), ext.lower()))
     return objects
 
 

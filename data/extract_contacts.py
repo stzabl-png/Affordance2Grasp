@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """
-Batch Contact Map Extraction from OakInk
+Batch Contact Map Extraction from OakInk (M1 改造版)
 
-遍历所有 OakInk filtered 序列,提取每帧的 contact map 数据。
+改动对比旧版:
+  1. 3指/10帧 滑动窗口稳定性过滤
+  2. 丢弃掌面接触，只保留手指接触
+  3. 输出改为 HDF5
+  4. 路径改为 data_hub/
 
 用法:
-    python batch_extract.py
-    python batch_extract.py --threshold 0.005 --frame_step 5
+    cd /home/lyh/Project/Affordance2Grasp
+    python data/extract_contacts.py
+    python data/extract_contacts.py --obj_id A16013
+    python data/extract_contacts.py --threshold 0.005 --min_fingers 3 --min_stable_frames 10
 """
 
 import os
@@ -17,23 +23,103 @@ import argparse
 import time
 import numpy as np
 import trimesh
+import h5py
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 
 
 # ============================================================
-# Config
+# Config — 使用 data_hub 路径
 # ============================================================
-OAKINK_DIR = config.OAKINK_DIR
-FILTERED_DIR = config.OAKINK_FILTERED_DIR
-ANNO_DIR = config.OAKINK_ANNO_DIR
-OBJ_DIR = config.OAKINK_OBJ_DIR
+FILTERED_DIR = config.SEQUENCES_V1_DIR
+OBJ_DIR = config.MESH_V1_DIR
 OUTPUT_DIR = config.CONTACTS_DIR
 
+# OakInk v1 标注路径 (anno 还在原始位置, 因为太大不搬)
+# 如果已移入 data_hub, 改这里即可
+ANNO_DIR = os.path.join(os.path.dirname(config.PROJECT_DIR), "OakInk", "image", "anno")
+if not os.path.exists(ANNO_DIR):
+    # Fallback: 尝试 data_hub 内部
+    ANNO_DIR = os.path.join(config.DATA_HUB, "annotations", "v1")
+
 
 # ============================================================
-# Helpers (reused from extract_contact.py)
+# MANO 手指拓扑 — 5个手指的顶点索引范围
+# ============================================================
+# MANO 模型共 778 个顶点, 按区域划分:
+# 使用基于距离的 5 指判定 (相对于 5 个指尖关键点)
+
+# MANO 指尖顶点 ID (拇指→小指)
+FINGERTIP_VERTEX_IDS = [744, 320, 443, 555, 672]
+FINGER_NAMES = ["thumb", "index", "middle", "ring", "pinky"]
+
+# 掌面距离阈值 (距手腕)
+PALM_DIST_THRESHOLD = 0.05  # 5cm
+
+
+def classify_hand_vertices(hand_v):
+    """将 MANO 778 顶点分为手掌和手指区域.
+
+    Returns:
+        palm_mask: (778,) bool, True=手掌
+        finger_mask: (778,) bool, True=手指
+    """
+    wrist = hand_v[0]
+    dists = np.linalg.norm(hand_v - wrist, axis=1)
+    palm_mask = dists < PALM_DIST_THRESHOLD
+    finger_mask = ~palm_mask
+    return palm_mask, finger_mask
+
+
+def identify_finger_contacts(hand_v, contact_mask):
+    """判断每根手指是否有接触.
+
+    将每个接触顶点分配到最近的指尖, 统计哪几根手指有接触.
+
+    Args:
+        hand_v: (778, 3) 手顶点 (物体坐标系)
+        contact_mask: (778,) bool 接触掩码
+
+    Returns:
+        finger_contact: dict {finger_name: bool}
+        n_fingers_in_contact: int
+        per_vertex_finger: (778,) int, -1=非指, 0-4=哪根指
+    """
+    # 指尖位置
+    tips = hand_v[FINGERTIP_VERTEX_IDS]  # (5, 3)
+
+    # 排除掌面
+    palm_mask, finger_mask = classify_hand_vertices(hand_v)
+
+    # 为每个手指区域的顶点分配最近指尖
+    per_vertex_finger = np.full(len(hand_v), -1, dtype=np.int32)
+    finger_verts_mask = finger_mask  # 只处理手指区域
+
+    if finger_verts_mask.sum() > 0:
+        finger_vert_ids = np.where(finger_verts_mask)[0]
+        finger_vert_pos = hand_v[finger_vert_ids]
+        # 到每个指尖的距离
+        dists_to_tips = np.linalg.norm(
+            finger_vert_pos[:, None, :] - tips[None, :, :], axis=2
+        )  # (N_finger_verts, 5)
+        nearest_finger = np.argmin(dists_to_tips, axis=1)  # (N_finger_verts,)
+        per_vertex_finger[finger_vert_ids] = nearest_finger
+
+    # 统计每根手指是否有接触
+    finger_contact = {}
+    for i, name in enumerate(FINGER_NAMES):
+        # 该手指的顶点中有接触的
+        finger_verts = (per_vertex_finger == i)
+        has_contact = np.any(contact_mask & finger_verts)
+        finger_contact[name] = bool(has_contact)
+
+    n_fingers = sum(finger_contact.values())
+    return finger_contact, n_fingers, per_vertex_finger
+
+
+# ============================================================
+# Contact computation (保留原有逻辑, 微调输出)
 # ============================================================
 
 def load_object_mesh(obj_id):
@@ -64,95 +150,17 @@ def load_pkl(seq_id, timestamp, sbj, frame, cam_id, anno_type):
         return pickle.load(f)
 
 
-# MANO palm/finger separation threshold
-# Palm = vertices within 5cm of wrist (vertex 0)
-# Finger = vertices >= 5cm from wrist
-PALM_DIST_THRESHOLD = 0.05  # 5cm
-
-
-def classify_hand_vertices(hand_v):
-    """将 MANO 778 顶点分为手掌和手指区域.
-    
-    Returns:
-        palm_mask: (778,) bool, True=手掌
-        finger_mask: (778,) bool, True=手指
-    """
-    wrist = hand_v[0]
-    dists = np.linalg.norm(hand_v - wrist, axis=1)
-    palm_mask = dists < PALM_DIST_THRESHOLD
-    finger_mask = ~palm_mask
-    return palm_mask, finger_mask
-
-
-def compute_force_center(finger_pts, finger_normals, palm_surface_pt, palm_normal):
-    """计算受力中心: 手指力线在掌心法线上的投影中点.
-    
-    掌心法线穿过物体内部, 是力的"骨架".
-    每条手指力线与掌心法线的最近点 → 投影到掌心法线上的参数 t.
-    受力中心 = palm_surface_pt + mean(t) * palm_normal
-    
-    Args:
-        finger_pts: (N, 3) 手指在物体表面的接触点
-        finger_normals: (N, 3) 手指接触点的内法线
-        palm_surface_pt: (3,) 掌心在物体表面的最近点
-        palm_normal: (3,) 掌心法线 (指向物体内部)
-    """
-    palm_d = palm_normal / (np.linalg.norm(palm_normal) + 1e-8)
-    
-    t_values = []
-    for i in range(len(finger_pts)):
-        p = finger_pts[i]
-        d = finger_normals[i]
-        d_norm = np.linalg.norm(d)
-        if d_norm < 1e-8:
-            continue
-        d = d / d_norm
-        
-        # 求两条直线的最近点
-        # 线1: palm_surface_pt + t * palm_d
-        # 线2: p + s * d
-        w = palm_surface_pt - p
-        a = np.dot(palm_d, palm_d)  # = 1
-        b_val = np.dot(palm_d, d)
-        c = np.dot(d, d)  # = 1
-        d_val = np.dot(palm_d, w)
-        e = np.dot(d, w)
-        
-        denom = a * c - b_val * b_val
-        if abs(denom) < 1e-8:
-            # 平行线, 取 w 在 palm_d 上的投影
-            t = -d_val
-        else:
-            t = (b_val * e - c * d_val) / denom
-        
-        t_values.append(t)
-    
-    if len(t_values) == 0:
-        return palm_surface_pt.copy().astype(np.float32)
-    
-    t_mean = np.mean(t_values)
-    # 限制 t >= 0 (受力中心应在物体内部, 不能在表面外)
-    t_mean = max(t_mean, 0.0)
-    
-    force_center = palm_surface_pt + t_mean * palm_d
-    return force_center.astype(np.float32)
-
-
 def compute_contacts(hand_v, obj_transf, obj_mesh, threshold):
-    """计算接触点,区分手指/手掌,返回手指接触点、手掌中心和受力中心.
-    
-    力线方向 = 物体表面内法线 (每个接触点向内施力)
-    掌心也作为一个力点参与受力中心计算
-    
+    """计算接触点, 只返回手指接触 (丢弃掌面).
+
     Returns:
-        finger_contact_idx: 手指区域的接触顶点索引
-        finger_contact_pts_obj: 手指接触点在物体表面的位置
-        palm_center_obj: 手掌中心在物体坐标系的位置
-        all_contact_idx: 所有接触顶点索引 (兼容旧格式)
-        all_contact_pts_obj: 所有接触点
-        dists: 所有顶点的距离
-        force_center_obj: 受力中心 (力线汇聚点)
-        force_normals: 力线方向 (内法线)
+        finger_contact_pts_obj: (M, 3) 手指接触点在物体表面的位置
+        dists: (778,) 所有顶点到物体表面的距离
+        contact_mask: (778,) bool 全部接触掩码 (含掌面, 用于统计)
+        finger_contact_mask: (778,) bool 手指接触掩码
+        n_fingers: int 有接触的手指数量
+        finger_detail: dict 每指接触详情
+        force_center: (3,) 受力中心
     """
     hand_v = np.array(hand_v)
     T_obj_cam = np.linalg.inv(np.array(obj_transf))
@@ -161,77 +169,25 @@ def compute_contacts(hand_v, obj_transf, obj_mesh, threshold):
 
     closest_pts, dists, face_idx = trimesh.proximity.closest_point(obj_mesh, hand_obj)
 
-    # 分类手掌/手指
+    # 分类
     palm_mask, finger_mask = classify_hand_vertices(hand_obj)
-    
-    # 手掌中心 (手掌区域手顶点平均位置)
-    palm_center_obj = hand_obj[palm_mask].mean(axis=0).astype(np.float32)
-    
-    # 所有接触 (兼容)
     contact_mask = dists < threshold
-    all_contact_idx = np.where(contact_mask)[0]
-    all_contact_pts_obj = closest_pts[contact_mask]
-    
-    # 手指接触
+
+    # 手指接触 (丢弃掌面)
     finger_contact_mask = contact_mask & finger_mask
-    finger_contact_idx = np.where(finger_contact_mask)[0]
-    finger_contact_pts_obj = closest_pts[finger_contact_mask]
+    finger_contact_pts = closest_pts[finger_contact_mask]
 
-    # ---- 受力中心计算 ----
-    # 获取物体表面法线 (面法线 → 内法线)
-    face_normals = np.array(obj_mesh.face_normals)
-    
-    # 收集所有力点: 手指接触点 + 手掌接触点在物体表面的投影
-    force_pts = []
-    force_normals_list = []
-    
-    # 手指接触的表面点和内法线
-    finger_face_idx = face_idx[finger_contact_mask]
-    for i in range(len(finger_contact_pts_obj)):
-        pt = finger_contact_pts_obj[i]
-        fn = face_normals[finger_face_idx[i]]
-        # 判断法线方向: 应该指向物体内部
-        # 如果法线指向手 (远离物体中心), 取反
-        obj_center = np.array(obj_mesh.centroid)
-        to_center = obj_center - pt
-        if np.dot(fn, to_center) < 0:
-            fn = -fn  # 翻转为内法线
-        force_pts.append(pt)
-        force_normals_list.append(fn)
-    
-    # 手掌中心也投射力线: 找到掌心在物体表面的最近点
-    palm_surface_pt, palm_dist, palm_face = trimesh.proximity.closest_point(
-        obj_mesh, palm_center_obj.reshape(1, -1))
-    if palm_dist[0] < threshold * 3:  # 掌心足够近
-        palm_fn = face_normals[palm_face[0]]
-        obj_center = np.array(obj_mesh.centroid)
-        to_center = obj_center - palm_surface_pt[0]
-        if np.dot(palm_fn, to_center) < 0:
-            palm_fn = -palm_fn
-        force_pts.append(palm_surface_pt[0])
-        force_normals_list.append(palm_fn)
-    
-    # 计算受力中心 (掌心法线投影方案)
-    if len(force_pts) >= 2 and palm_dist[0] < threshold * 3:
-        # 手指力点 = 不含掌心的那些
-        n_finger_force = len(force_pts) - 1 if palm_dist[0] < threshold * 3 else len(force_pts)
-        finger_force_pts = np.array(force_pts[:n_finger_force], dtype=np.float32)
-        finger_force_norms = np.array(force_normals_list[:n_finger_force], dtype=np.float32)
-        force_pts_arr = np.array(force_pts, dtype=np.float32)
-        force_normals_arr = np.array(force_normals_list, dtype=np.float32)
-        force_center = compute_force_center(
-            finger_force_pts, finger_force_norms,
-            palm_surface_pt[0].astype(np.float32),
-            palm_fn.astype(np.float32)
-        )
+    # 判断每根手指
+    finger_detail, n_fingers, _ = identify_finger_contacts(hand_obj, contact_mask)
+
+    # 受力中心 (简化: 手指接触点均值)
+    if len(finger_contact_pts) > 0:
+        force_center = finger_contact_pts.mean(axis=0).astype(np.float32)
     else:
-        force_pts_arr = np.array(force_pts, dtype=np.float32) if force_pts else all_contact_pts_obj
-        force_normals_arr = np.zeros_like(force_pts_arr)
-        force_center = all_contact_pts_obj.mean(axis=0).astype(np.float32) if len(all_contact_pts_obj) > 0 else palm_center_obj
+        force_center = np.zeros(3, dtype=np.float32)
 
-    return (finger_contact_idx, finger_contact_pts_obj, palm_center_obj,
-            all_contact_idx, all_contact_pts_obj, dists,
-            force_center, force_pts_arr, force_normals_arr)
+    return (finger_contact_pts, dists, contact_mask, finger_contact_mask,
+            n_fingers, finger_detail, force_center)
 
 
 def get_frames(seq_path):
@@ -257,122 +213,212 @@ def parse_seq_folder(folder_name):
 
 
 # ============================================================
-# Main batch processing
+# 核心改动: 滑动窗口稳定性过滤
 # ============================================================
 
-def process_sequence(seq_path, category, intent, obj_mesh, threshold, frame_step):
-    """处理一个序列,返回处理的帧数和结果列表."""
+def find_stable_windows(frames_data, min_fingers=3, min_frames=10):
+    """滑动窗口: 找连续 ≥min_frames 帧中 ≥min_fingers 同时接触的窗口.
+
+    Args:
+        frames_data: list of (frame_idx, n_fingers, frame_data_dict)
+        min_fingers: 至少几根手指同时接触
+        min_frames: 至少连续多少帧
+
+    Returns:
+        stable_ranges: list of (start_idx, end_idx) 在 frames_data 中的索引范围
+    """
+    if len(frames_data) < min_frames:
+        return []
+
+    # 判断每帧是否满足手指数条件
+    meets_condition = [fd[1] >= min_fingers for fd in frames_data]
+
+    # 滑动窗口找连续满足的段
+    stable_ranges = []
+    start = None
+    for i, ok in enumerate(meets_condition):
+        if ok:
+            if start is None:
+                start = i
+        else:
+            if start is not None and (i - start) >= min_frames:
+                stable_ranges.append((start, i))
+            start = None
+
+    # 处理末尾
+    if start is not None and (len(meets_condition) - start) >= min_frames:
+        stable_ranges.append((start, len(meets_condition)))
+
+    return stable_ranges
+
+
+# ============================================================
+# 序列处理 (改造版)
+# ============================================================
+
+def process_sequence(seq_path, category, intent, obj_mesh, threshold,
+                     min_fingers, min_stable_frames):
+    """处理一个序列, 应用稳定性过滤.
+
+    Returns:
+        n_saved: 保存的帧数
+        results: 结果摘要列表
+        stats: 统计信息 dict
+    """
     folder_name = os.path.basename(seq_path)
     seq_id, timestamp, obj_id = parse_seq_folder(folder_name)
 
     frames = get_frames(seq_path)
     if not frames:
-        return 0, []
+        return 0, [], {"reason": "no_frames"}
 
-    # 找到有标注的帧
     cam_id = 0
-    valid_frames = []
+
+    # Step 1: 扫描所有帧, 记录每帧的手指接触数
+    all_frames_data = []
     for frame in frames:
         sbj = find_sbj_flag(seq_id, timestamp, frame, cam_id)
-        if sbj is not None:
-            valid_frames.append((frame, sbj))
+        if sbj is None:
+            continue
 
-    if not valid_frames:
-        return 0, []
-
-    # 找到首次接触帧
-    first_contact_frame = None
-    for frame, sbj in valid_frames:
         hv = load_pkl(seq_id, timestamp, sbj, frame, cam_id, "hand_v")
         ot = load_pkl(seq_id, timestamp, sbj, frame, cam_id, "obj_transf")
         if hv is None or ot is None:
             continue
-        contact_result = compute_contacts(hv, ot, obj_mesh, threshold)
-        (finger_idx, finger_pts, palm_center, all_idx, all_pts, dists,
-         force_center, force_pts, force_norms) = contact_result
-        if (dists < threshold).sum() > 0:
-            first_contact_frame = frame
-            break
 
-    if first_contact_frame is None:
-        # 没有接触帧,跳过
-        return 0, []
+        (finger_pts, dists, contact_mask, finger_contact_mask,
+         n_fingers, finger_detail, force_center) = compute_contacts(
+            hv, ot, obj_mesh, threshold)
 
-    # 从首次接触帧开始,每隔 frame_step 取一帧
-    contact_frames = [(f, s) for f, s in valid_frames if f >= first_contact_frame]
-    sampled = contact_frames[::frame_step]
+        all_frames_data.append({
+            "frame": frame,
+            "sbj": sbj,
+            "n_fingers": n_fingers,
+            "finger_detail": finger_detail,
+            "finger_pts": finger_pts,
+            "finger_contact_mask": finger_contact_mask,
+            "force_center": force_center,
+            "n_all_contacts": int(contact_mask.sum()),
+            "n_finger_contacts": int(finger_contact_mask.sum()),
+        })
 
-    # 输出目录
+    if not all_frames_data:
+        return 0, [], {"reason": "no_valid_frames"}
+
+    # Step 2: 滑动窗口过滤
+    indexed_data = [(d["frame"], d["n_fingers"], d) for d in all_frames_data]
+    stable_ranges = find_stable_windows(indexed_data, min_fingers, min_stable_frames)
+
+    if not stable_ranges:
+        total_frames = len(all_frames_data)
+        avg_fingers = np.mean([d["n_fingers"] for d in all_frames_data])
+        return 0, [], {
+            "reason": "no_stable_window",
+            "total_frames": total_frames,
+            "avg_fingers": round(float(avg_fingers), 1),
+        }
+
+    # Step 3: 从稳定窗口中保存帧 (只保存手指接触)
     out_dir = os.path.join(OUTPUT_DIR, category, seq_id)
     os.makedirs(out_dir, exist_ok=True)
 
     results = []
-    for frame, sbj in sampled:
-        hv = load_pkl(seq_id, timestamp, sbj, frame, cam_id, "hand_v")
-        ot = load_pkl(seq_id, timestamp, sbj, frame, cam_id, "obj_transf")
-        if hv is None or ot is None:
-            continue
+    saved_frames = set()
 
-        contact_result = compute_contacts(hv, ot, obj_mesh, threshold)
-        (finger_contact_idx, finger_contact_pts, palm_center,
-         all_contact_idx, all_contact_pts, dists,
-         force_center, force_pts, force_normals) = contact_result
+    for start_idx, end_idx in stable_ranges:
+        for i in range(start_idx, end_idx):
+            d = indexed_data[i][2]
+            frame = d["frame"]
 
-        if len(all_contact_idx) == 0:
-            continue
+            if frame in saved_frames:
+                continue
+            saved_frames.add(frame)
 
-        # 保存
-        out_path = os.path.join(out_dir, f"frame_{frame}.npz")
-        np.savez_compressed(out_path,
-            # 手指接触 (新)
-            finger_contact_idx=finger_contact_idx,
-            finger_contact_points_obj=finger_contact_pts,
-            palm_center_obj=palm_center,
-            # 受力中心 (新)
-            force_center_obj=force_center,
-            force_pts_obj=force_pts,
-            force_normals=force_normals,
-            # 所有接触 (兼容旧格式)
-            contact_idx=all_contact_idx,
-            contact_points_obj=all_contact_pts,
-            distances=dists,
-            # 元数据
-            obj_id=obj_id,
-            category=category,
-            intent=intent,
-            seq_id=seq_id,
-            frame=frame,
-            threshold=threshold
-        )
-        results.append({
-            "frame": int(frame),
-            "n_contacts": int(len(all_contact_idx)),
-            "n_finger_contacts": int(len(finger_contact_idx)),
-            "min_dist": float(dists.min())
-        })
+            if d["n_finger_contacts"] == 0:
+                continue
 
-    return len(results), results
+            # 保存为 HDF5
+            out_path = os.path.join(out_dir, f"frame_{frame}.hdf5")
+            with h5py.File(out_path, 'w') as f:
+                # 手指接触点 (丢弃掌面)
+                f.create_dataset("finger_contact_points",
+                                 data=d["finger_pts"].astype(np.float32),
+                                 compression="gzip")
+                f.create_dataset("force_center",
+                                 data=d["force_center"])
 
+                # 元数据
+                f.attrs["obj_id"] = obj_id
+                f.attrs["category"] = category
+                f.attrs["intent"] = intent
+                f.attrs["seq_id"] = seq_id
+                f.attrs["frame"] = int(frame)
+                f.attrs["threshold"] = threshold
+                f.attrs["n_finger_contacts"] = d["n_finger_contacts"]
+                f.attrs["n_fingers"] = d["n_fingers"]
+
+                # 每指接触详情
+                for fname, has_contact in d["finger_detail"].items():
+                    f.attrs[f"finger_{fname}"] = bool(has_contact)
+
+            results.append({
+                "frame": int(frame),
+                "n_finger_contacts": d["n_finger_contacts"],
+                "n_fingers": d["n_fingers"],
+            })
+
+    stats = {
+        "total_scanned": len(all_frames_data),
+        "stable_windows": len(stable_ranges),
+        "stable_frames": sum(e - s for s, e in stable_ranges),
+        "saved_frames": len(results),
+    }
+    return len(results), results, stats
+
+
+# ============================================================
+# Main
+# ============================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="Batch extract contact maps from OakInk")
-    parser.add_argument("--threshold", type=float, default=0.005, help="Contact distance threshold (m)")
-    parser.add_argument("--frame_step", type=int, default=3, help="Sample every N frames after first contact")
-    parser.add_argument("--obj_id", type=str, default=None, help="Only process sequences for this object ID (e.g. A16013)")
+    parser = argparse.ArgumentParser(description="Batch extract contacts (M1: stability filter + finger-only + HDF5)")
+    parser.add_argument("--threshold", type=float, default=config.CONTACT_THRESHOLD,
+                        help="Contact distance threshold (m)")
+    parser.add_argument("--min_fingers", type=int, default=config.MIN_FINGERS,
+                        help="Min fingers in contact for stability")
+    parser.add_argument("--min_stable_frames", type=int, default=config.MIN_STABLE_FRAMES,
+                        help="Min consecutive frames for stability")
+    parser.add_argument("--obj_id", type=str, default=None,
+                        help="Only process sequences for this object ID")
     args = parser.parse_args()
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     print("=" * 60)
-    print("Batch Contact Map Extraction")
+    print("M1: Contact Extraction (stability filter + finger-only + HDF5)")
     print("=" * 60)
-    print(f"  OakInk dir: {OAKINK_DIR}")
-    print(f"  Output dir: {OUTPUT_DIR}")
-    print(f"  Threshold:  {args.threshold}m")
-    print(f"  Frame step: every {args.frame_step} frames")
+    print(f"  Sequences:     {FILTERED_DIR}")
+    print(f"  Meshes:        {OBJ_DIR}")
+    print(f"  Annotations:   {ANNO_DIR}")
+    print(f"  Output:        {OUTPUT_DIR}")
+    print(f"  Threshold:     {args.threshold}m")
+    print(f"  Min fingers:   {args.min_fingers}")
+    print(f"  Min stable:    {args.min_stable_frames} frames")
+    if args.obj_id:
+        print(f"  Filter obj_id: {args.obj_id}")
     sys.stdout.flush()
 
-    # Discover all sequences
+    # 检查 ANNO_DIR
+    if not os.path.exists(ANNO_DIR):
+        print(f"\n  ❌ Annotation dir not found: {ANNO_DIR}")
+        print(f"  提示: OakInk v1 的 image/anno/ 目录需要在这个路径可访问")
+        return
+
+    # Discover sequences
+    if not os.path.exists(FILTERED_DIR):
+        print(f"\n  ❌ Filtered dir not found: {FILTERED_DIR}")
+        return
+
     categories = sorted(os.listdir(FILTERED_DIR))
     all_sequences = []
     for cat in categories:
@@ -391,16 +437,20 @@ def main():
     print(f"\n  Found {len(all_sequences)} sequences across {len(categories)} categories")
     sys.stdout.flush()
 
-    # Cache loaded meshes
+    # Process
     mesh_cache = {}
     summary = {
         "total_sequences": len(all_sequences),
         "processed": 0,
         "skipped": 0,
+        "no_stable": 0,
         "total_frames": 0,
         "categories": {},
-        "threshold": args.threshold,
-        "frame_step": args.frame_step
+        "params": {
+            "threshold": args.threshold,
+            "min_fingers": args.min_fingers,
+            "min_stable_frames": args.min_stable_frames,
+        },
     }
 
     total_start = time.time()
@@ -409,11 +459,9 @@ def main():
         folder_name = os.path.basename(seq_path)
         seq_id, _, obj_id = parse_seq_folder(folder_name)
 
-        # --obj_id 过滤
         if args.obj_id and obj_id != args.obj_id:
             continue
 
-        # Load or cache mesh
         if obj_id not in mesh_cache:
             mesh = load_object_mesh(obj_id)
             if mesh is None:
@@ -426,8 +474,9 @@ def main():
         obj_mesh = mesh_cache[obj_id]
 
         t0 = time.time()
-        n_frames, results = process_sequence(
-            seq_path, cat, intent, obj_mesh, args.threshold, args.frame_step
+        n_frames, results, stats = process_sequence(
+            seq_path, cat, intent, obj_mesh, args.threshold,
+            args.min_fingers, args.min_stable_frames
         )
         elapsed = time.time() - t0
 
@@ -438,10 +487,15 @@ def main():
                 summary["categories"][cat] = {"sequences": 0, "frames": 0}
             summary["categories"][cat]["sequences"] += 1
             summary["categories"][cat]["frames"] += n_frames
-            status = f"{n_frames} frames"
+            status = f"✅ {n_frames} frames ({stats.get('stable_windows', 0)} windows)"
         else:
-            summary["skipped"] += 1
-            status = "no contacts"
+            reason = stats.get("reason", "unknown")
+            if reason == "no_stable_window":
+                summary["no_stable"] += 1
+                status = f"⚠️ no stable window (avg {stats.get('avg_fingers', 0)} fingers)"
+            else:
+                summary["skipped"] += 1
+                status = f"⏭️ {reason}"
 
         print(f"  [{i+1}/{len(all_sequences)}] {cat}/{seq_id}: {status} ({elapsed:.1f}s)")
         sys.stdout.flush()
@@ -450,17 +504,18 @@ def main():
 
     # Save summary
     summary["total_time_seconds"] = round(total_time, 1)
-    summary_path = os.path.join(OUTPUT_DIR, "summary.json")
+    summary_path = os.path.join(OUTPUT_DIR, "summary_m1.json")
     with open(summary_path, 'w') as f:
         json.dump(summary, f, indent=2)
 
     print(f"\n{'=' * 60}")
     print(f"DONE in {total_time:.1f}s")
-    print(f"  Processed: {summary['processed']} sequences")
-    print(f"  Skipped:   {summary['skipped']} sequences")
+    print(f"  Processed:  {summary['processed']} sequences")
+    print(f"  No stable:  {summary['no_stable']} sequences")
+    print(f"  Skipped:    {summary['skipped']} sequences")
     print(f"  Total frames: {summary['total_frames']}")
-    print(f"  Output: {OUTPUT_DIR}")
-    print(f"  Summary: {summary_path}")
+    print(f"  Output:     {OUTPUT_DIR}")
+    print(f"  Summary:    {summary_path}")
     print(f"{'=' * 60}")
     sys.stdout.flush()
 
